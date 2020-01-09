@@ -34,7 +34,7 @@ Reset:
 
     ; Variables and TIA registers
     ldx #$80                        ; blue
-    stx COLUBX                      ; set background color
+    stx COLUBK                      ; set background color
 
     ; Init lookup table pointers
     ;   TODO
@@ -42,7 +42,7 @@ Reset:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;                          Process New Frame                                ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-NewFrame:
+NewFrame:                           ; frame = 262 scanlines
     
     ; Calculations
     ;   TODO
@@ -57,19 +57,18 @@ NewFrame:
     lda #0
     sta VSYNC                       ; VSYNC off
 
-    ; Render 37 VBLANK lines
     ldx #37
 DrawVBLANK:                         ; Draw VBLANK lines
     sta WSYNC                       ; Wait for next scanline
     dex
-    bne DrawVBLANK                  ; while(x > 0) draw VBLANK
+    bne DrawVBLANK                  ; while(X GT 0) draw VBLANK
     lda #0
     sta VBLANK                      ; VBLANK off
 
-RenderScoreboard:
+DrawScoreboard:
     ; TODO
 
-RenderVisibleLines:
+SetupVisibleArea:
     lda #$84                        ; blue
     sta COLUBK                      ; set background color
     lda #01                         ; white
@@ -84,13 +83,20 @@ RenderVisibleLines:
     lda #0
     sta PF2                         ; set playfield 2 bit pattern
 
-    ; Render 30 overscan lines
+    ldx #192                        
+DrawVisibleLines:                   ; remaining lines = 192
+    sta WSYNC                       ; wait for next scanline
+    dex
+    bne DrawVisibleLines            ; while(X GT 192)
+    
+    ; TODO draw sprites
+
     lda #2
     sta VBLANK                      ; VBLANK on
+    ldx #30                         ; draw 30 overscan lines
 Overscan:
-    ldx #30
     dex
-    bne Overscan                    ; while(x > 0) draw overscan
+    bne Overscan                    ; while(X GT 0) draw overscan
     lda #0
     sta VBLANK                      ; VBLANK off
 
@@ -125,6 +131,12 @@ NoInputP0:
     ; TODO No Input
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;                          Update Positions                                 ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; TODO
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;                          Check Collisions                                 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -135,30 +147,36 @@ FinishFrame:
     jmp NewFrame
 
 
+; Subroutines TODO
+;   Multiply
+;   Divide
+;   Random (LFSR)
+;   DigitOffset (scoreboard,timer)
+;   DrawSprite
+;   Sleep 
+
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;                           SetObjectXPos                                   ;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;    Summary: Set object horizontal position                                ;;
-;;    Params:                                                                ;;
-;;      A - target x position                                                ;;
-;;      Y - object type [0:P0, 1:P1, 2:M0, 3:M1, 4:BALL]                     ;;
-;;    Returns:                                                               ;;
-;;      A - New object x position                                            ;;
+;;                           [SetObjectXPos]                                 ;;
+;;  Summary: Set object horizontal position                                  ;;
+;;  Params:  A - target x position                                           ;;
+;;             Y - object type [0:P0, 1:P1, 2:M0, 3:M1, 4:BALL]              ;;
+;;  Returns: A - New object x position                                       ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 SetObjectXPos subroutine
     sta WSYNC
     sec                             ; set carry
 .Div15:
-    sbc #5                          ; coarse positioning
+    sbc #5                          ; coarse position
     bcs .Div15                      ; while(!C)
     eor #7                          ; adjust offset -8 to +7
     asl                             ; shift left 4, HMP0 uses 4 bits
     asl
     asl
     asl
-    sta HMP0,Y                      ; set fine positioning
-    sta RESP0                       ; reset 15-step coarse positioning
+    sta HMP0,Y                      ; set fine position, offset of obj type
+    sta RESP0                       ; reset 15-step coarse position
     rts
 
 
