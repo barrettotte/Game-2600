@@ -1,6 +1,13 @@
 # Notes
 
 
+## Playfield
+* PF0 - upper 4 bits used, reverse order output
+* PF1 - 8 bits, normal output
+* PF2 - 8 bits, reverse order output
+
+
+
 ## Memory Map
 ```
 +---------------------------+
