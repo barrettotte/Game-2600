@@ -1,6 +1,6 @@
 # Defender-2600
 
-A super basic game made for the Atari 2600 (VCS) to strengthen my assembly knowledge in a fun way.
+A super basic "game" made for the Atari 2600 (VCS) to strengthen my 6502 assembly knowledge in a fun way.
 
 I didn't want to make anything too crazy that I would spend weeks on.
 I was just genuinely curious what all goes into making a game with this architecture.

@@ -13,8 +13,8 @@
 ;;   Include header files with VCS registers, memory mappings, and macros    ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-    include "vcs.h"
-    include "macro.h"
+    include "vcs.h"                 ; TODO: remove include and embed in here
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;                      Declare variables/constants                          ;;
@@ -31,16 +31,18 @@ ScoreGfx            ds 1            ; $86     : score graphics data
 TimerGfx            ds 1            ; $87     : timer graphics data
 Temp                ds 1            ; $88     : general purpose temp variable
 
-ObjectX             ds 4            ; $89-$8C : P0,P1,M0,M1 x positions
-ObjectY             ds 4            ; $8D-$90 : P0,P1,M0,M1 y positions
+ObjectX             ds 4            ; $89-$8C : P0, P1, M0, M1 x positions
+ObjectY             ds 4            ; $8D-$90 : P0, P1, M0, M1 y positions
 
 PlayerDraw          ds 1            ; $91     : draw storage for player 0
 EnemyDraw           ds 1            ; $92     : draw storage for player 1
 PlayerGfxPtr        ds 2            ; $93-$94 : graphics pointer for player 0
 EnemyGfxPtr         ds 2            ; $95-$96 : graphics pointer for player 1
+PlayerSprOffset     ds 1            ; $97     : player sprite offset
+EnemySprOffset      ds 1            ; $98     : enemy sprite offset
 
-Frame               ds 1            ; $97     : count frames drawn
-Random              ds 1            ; $98     : general purpose random number
+Frame               ds 1            ; $9D     : count frames drawn
+Random              ds 1            ; $9E     : general purpose random number
 
 ; Constants
 GAME_HEIGHT         equ 89          ; 2 line kernel -> 180 = 90 * 2
@@ -51,6 +53,7 @@ MUSH_HEIGHT         equ 8           ; height of mushroom graphics
 
 BG_COLOR            equ #$84        ; blue
 
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;                          ROM Entry Point                                  ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -59,13 +62,22 @@ BG_COLOR            equ #$84        ; blue
     org $F800                       ; 2K ROM start $F800, 4K ROM start $F000
 
 Reset:                              ; entry point label
-    CLEAN_START                     ; clean memory and registers TODO: Move to this file
+    ; clean memory and registers
+    sei                             ; set external interrupt
+    cld                             ; clear decimal flag
+    ldx #0                          ; reset x,y,a registers 
+    txa                             ;
+    tay                             ;
+ClearStack:                         ; set stack addresses to 0
+    dex                             ; x--
+    txs                             ;
+    pha                             ; push 0 to stack
+    bne ClearStack                  ; while(!z) keep clearing stack
 
     ; init variables
     lda #0                          ;
     sta Score                       ; reset score
     sta Timer                       ; reset timer
-
     lda #$80                        ;
     sta Random                      ; init random
 
@@ -77,8 +89,20 @@ Reset:                              ; entry point label
     sty ObjectY                     ; set P0 y position
     sty ObjectY+1                   ; set P1 y position
 
+    lda #0                          ;
+    sta PlayerSprOffset             ; set player initial sprite
+    sta EnemySprOffset              ; set enemy initial sprite
+
     ; init lookup table pointers
-    ; TODO:
+    lda #<PlayerGfx0                ; lo byte
+    sta PlayerGfxPtr                ;
+    lda #>PlayerGfx0                ; hi byte
+    sta PlayerGfxPtr+1              ;
+
+    lda #<EnemyGfx0                 ; lo byte
+    sta EnemyGfxPtr                 ;
+    lda #>EnemyGfx0                 ; hi byte
+    sta EnemyGfxPtr+1               ;
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -124,7 +148,7 @@ VerticalSync subroutine             ;
 ;;  Game logic                                                               ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 VerticalBlank subroutine            ;
-    jsr ReadJoystick                ; handle player controls
+    jsr ProcessInput                ; handle player input
     jsr UpdateObjPositions          ; update object positions
     jsr SetObjColors                ; set object colors
     jsr SetupScoreboard             ; prepare scoreboard for display
@@ -149,7 +173,7 @@ VerticalBlank subroutine            ;
 ;;   - Line 2 updates player 1 and playfield                                 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 Kernel subroutine                   ;
-.Kernel:
+.Kernel:                            ;       -
     sta WSYNC                       ;       - wait for next scanline
     ; ----------------------------- ;       - new scanline
     lda INTIM                       ;  4  4 - check timer
@@ -219,26 +243,24 @@ Kernel subroutine                   ;
     lda #0                          ;  2 24 - else, turn off player 0 graphics
     .byte $2C                       ;  4 28 - ABS BIT trick skip lda (gfxPtr),Y
 .DrawP0Gfx:                         ;    23
+    ; TODO: sprite offset here
     lda (PlayerGfxPtr),Y            ;  5 28 - load player graphics data
     sta WSYNC                       ;  3 31 - wait for next scanline
     ; ----------------------------- ;       - new scanline
     ;  line one of two-line kernel  ;       -
     sta GRP0                        ;  3  3 - @0-22 set player 0 graphics
-    ldx #%11111111                  ;  2  5 - TODO: playfield test bit pattern
-    stx PF0                         ;  3  8 - @0-22
-    lda #ENEMY_HEIGHT-1             ;  2 10 - load enemy height
+    lda #ENEMY_HEIGHT-1             ;  2 10 - preload enemy height
     dcp EnemyDraw                   ;  5 15 - decrement and compare to height
     bcs .DrawP1Gfx                  ;  2 17 - (3 18) if(c) enemy is on line
     lda #0                          ;  2 19 - else, turn off player 1 graphics
     .byte $2C                       ;  4 23 - ABS BIT trick skip lda (gfxPtr),Y
 .DrawP1Gfx:                         ;    18 -
+    ; TODO: sprite offset here
     lda (EnemyGfxPtr),Y             ;  5 23 - load enemy graphics data
     sta WSYNC                       ;  3 26 - wait for next scanline
     ; ----------------------------- ;       - new scanline
     ;  line two of two-line kernel  ;       -
     sta GRP1                        ;  3  3 - @0-22 set player 1 graphics
-    ldx #0                          ;  2  5 - TODO: playfield test bit pattern
-    stx PF0                         ;  3  8 - @0-22
     dey                             ;  2 10 - y-- (kernel loop counter)
     bpl .GameAreaLoop               ;  2 12 - (3 13) if(!z) draw more game area
     rts                             ;  6 13 - end Kernel subroutine
@@ -286,15 +308,14 @@ SetObjColors subroutine             ;
     ldy #3                          ; default to use color
     lda SWCHB                       ; read console switches
     and #%00001000                  ; mask for TV Type switch
-    bne .ColorLoop                  ; if 3rd bit on, use color
+    bne .Loop                       ; if 3rd bit on, use color
     ldy #7                          ; else, use black and white colors
-
-.ColorLoop:                         ;
+.Loop:                              ;
     lda ObjectColors,Y              ; load color from table
     sta COLUP0,X                    ; set object color
     dey                             ; y--
     dex                             ; x--
-    bpl .ColorLoop                  ; while(x > 0)
+    bpl .Loop                       ; while(x > 0)
     rts                             ; end SetObjColors subroutine
 
 
@@ -338,7 +359,7 @@ SetupScoreboard subroutine          ;
 ;;  PARMS:  A = X position of object                                         ;;
 ;;          X = target object  [0=P0,1=P1,2=M0,3=M1,4=BALL]                  ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-SetObjXPos subroutine               ; TODO: movement is choppy
+SetObjXPos subroutine               ;
     sec                             ; set carry
     sta WSYNC                       ; wait for next scanline
 .Div15:                             ;       - 5 cycles per loop
@@ -355,32 +376,16 @@ SetObjXPos subroutine               ; TODO: movement is choppy
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;                           [ReadJoystick]                                  ;;
-;;  Handle joystick inputs.                                                  ;;
+;;                           [ProcessInput]                                  ;;
+;;  Handle joystick input.                                                   ;;
 ;;  Check SWCHA register in RIOT for joystick signals.                       ;;
-;;  Fire read from INPT4(left) and INPT5(right)                              ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-ReadJoystick subroutine             ;
+ProcessInput subroutine             ;
     lda SWCHA                       ; read joystick positions
     ldx #0                          ; x:  0=left, 1=right
 .Loop:                              ;
-    ldy INPT4,X                     ; check firebutton for joystick
-    bmi .NormalSpeed                ; if(n) move normal speed
-    pha                             ; push A to stack
-    lda Frame                       ; else, move once every 8 frames
-    and #7                          ; check if time to move
-    beq .SlowSpeed                  ; if(z) move slow
-    pla                             ; pull A from stack
-    asl                             ; shift 4 to read next joystick
-    asl                             ;
-    asl                             ;
-    asl                             ;
-    jmp .NextJoystick               ; read next joystick input
-.SlowSpeed:                         ;
-    pla                             ; pull A from stack
-.NormalSpeed:                       ;
     asl                             ; shift left, carry bit = R
-    bcs .CheckLeft                   ; if(c) right is not pressed
+    bcs .CheckLeft                  ; if(c) right is not pressed
     ldy ObjectX,X                   ; load object x position
     iny                             ; else, move object right
     cpy #160                        ; check screen boundary
@@ -414,7 +419,7 @@ ReadJoystick subroutine             ;
     sty ObjectY,X                   ; set object y position
 .CheckUp:                           ;
     asl                             ; shift left, carry bit = U
-    bcs .NextJoystick               ; if(c) up is not pressed
+    bcs .Done                       ; if(c) up is not pressed
     ldy ObjectY,X                   ; loada object y position
     iny                             ; else, move object up
     cpy #GAME_HEIGHT*2+2            ; check screen boundary
@@ -422,11 +427,9 @@ ReadJoystick subroutine             ;
     ldy #0                          ; else, wrap to bottom of screen
 .SetUp:                             ;
     sty ObjectY,X                   ; set object y position
-.NextJoystick:                      ;
-    inx                             ; iterate to next joystick
-    cpx #2                          ; check if both joysticks processed
-    bne .Loop                       ; if(!z) process next joystick
-    rts                             ; end ReadJoystick subroutine
+.Done:
+    rts                             ; end ProcessInput subroutine
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;                         [UpdateObjPositions]                              ;;
@@ -453,11 +456,11 @@ UpdateObjPositions subroutine       ;
     sec                             ; set carry
     sbc Temp                        ;
     sta PlayerDraw                  ;
-    lda #<(PlayerGfx2+PLAYER_HEIGHT-1); lo bit player gfx pointer
+    lda #<(PlayerGfx0+PLAYER_HEIGHT-1); lo bit player gfx pointer
     sec                             ; set carry
     sbc Temp                        ;
     sta PlayerGfxPtr                ;
-    lda #>(PlayerGfx2+PLAYER_HEIGHT-1); hi bit player gfx pointer
+    lda #>(PlayerGfx0+PLAYER_HEIGHT-1); hi bit player gfx pointer
     sbc #0                          ;
     sta PlayerGfxPtr+1              ;
 
@@ -494,6 +497,7 @@ Sleep12 subroutine                  ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;                         ROM Lookup Tables                                 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 ObjectColors:
     .byte $86                       ; blue       - COLUP0, p0 and m0
     .byte $C6                       ; green      - COLUP1, p1 and m1
@@ -609,19 +613,9 @@ MushSprite0:                        ;
     .byte #%01111110                ;  ######
     .byte #%00111100                ;   ####
     .byte #%00111100                ;   ####
-    .byte #%00011000                ;    ##    
-
-MushSprite1: ; TODO: Might not need this...same as AnimShroom0
-    .byte #%11111111                ; ########
     .byte #%00011000                ;    ##
-    .byte #%00011000                ;    ##
-    .byte #%01111110                ;  ######
-    .byte #%01111110                ;  ######
-    .byte #%00111100                ;   ####
-    .byte #%00111100                ;   ####
-    .byte #%00011000                ;    ## 
 
-MushColor0: ; TODO: Might not need this...Make subroutine, add #$02 instead
+MushColor0:                         ;
     .byte #$F2                      ;
     .byte #$0C                      ;
     .byte #$0C                      ;
@@ -630,16 +624,6 @@ MushColor0: ; TODO: Might not need this...Make subroutine, add #$02 instead
     .byte #$42                      ;
     .byte #$42                      ;
     .byte #$42                      ;
-    
-MushColor1:                         ; TODO: Needed?
-    .byte #$F2                      ;
-    .byte #$0C                      ;
-    .byte #$0C                      ;
-    .byte #$44                      ;
-    .byte #$44                      ;
-    .byte #$44                      ;
-    .byte #$44                      ;
-    .byte #$44                      ;
 
 EnemyGfx0:                          ;
     .byte #%01100110                ;  ##  ##
@@ -661,17 +645,7 @@ EnemyGfx1:                          ;
     .byte #%01111110                ;  ######
     .byte #%00111100                ;   ####
         
-EnemyColor0:                        ; TODO: Might not need this at all, just hardcode in subr
-    .byte #$D6                      ;
-    .byte #$D6                      ;
-    .byte #$D6                      ;
-    .byte #$D6                      ;
-    .byte #$D6                      ;
-    .byte #$D6                      ;
-    .byte #$D6                      ;
-    .byte #$D6                      ;
-
-EnemyColor1:                        ; TODO: See above
+EnemyColor0:                        ; TODO: hardcode in draw proc.
     .byte #$D6                      ;
     .byte #$D6                      ;
     .byte #$D6                      ;
@@ -699,7 +673,7 @@ PlayerGfx0:                         ;
     .byte #%01011010                ;  # ## #
     .byte #%00111100                ;   ####
 
-PlayerGfx1:                         ;
+PlayerGfx1:                         ; TODO: Gfx1 and Gfx2 use reflection instead
     .byte #%11001100                ; ##  ##
     .byte #%01000100                ;  #   #
     .byte #%01000100                ;  #   #
@@ -753,61 +727,7 @@ PlayerGfx3:                         ;
     .byte #%01111110                ;  ######
     .byte #%00111100                ;   ####
     
-PlayerColor0:                       ; TODO: Might not need the rest, player always has same color
-    .byte #$F0                      ;
-    .byte #$A0                      ;
-    .byte #$A0                      ;
-    .byte #$A0                      ;
-    .byte #$A0                      ;
-    .byte #$30                      ;
-    .byte #$04                      ;
-    .byte #$40                      ;
-    .byte #$40                      ;
-    .byte #$40                      ;
-    .byte #$FC                      ;
-    .byte #$FC                      ;
-    .byte #$FC                      ;
-    .byte #$FC                      ;
-    .byte #$FC                      ;
-    .byte #$FC                      ;
-
-PlayerColor1: ;TODO: See above
-    .byte #$F0                      ;
-    .byte #$A0                      ;
-    .byte #$A0                      ;
-    .byte #$A0                      ;
-    .byte #$A0                      ;
-    .byte #$30                      ;
-    .byte #$04                      ;
-    .byte #$40                      ;
-    .byte #$40                      ;
-    .byte #$40                      ;
-    .byte #$FC                      ;
-    .byte #$FC                      ;
-    .byte #$FC                      ;
-    .byte #$FC                      ;
-    .byte #$FC                      ;
-    .byte #$FC                      ;
-
-PlayerColor2: ;TODO: See above
-    .byte #$F0                      ;
-    .byte #$A0                      ;
-    .byte #$A0                      ;
-    .byte #$A0                      ;
-    .byte #$A0                      ;
-    .byte #$30                      ;
-    .byte #$04                      ;
-    .byte #$40                      ;
-    .byte #$40                      ;
-    .byte #$40                      ;
-    .byte #$FC                      ;
-    .byte #$FC                      ;
-    .byte #$FC                      ;
-    .byte #$FC                      ;
-    .byte #$FC                      ;
-    .byte #$FC                      ;
-
-PlayerColor3: ;TODO: See above
+PlayerColor0:                       ; 
     .byte #$F0                      ;
     .byte #$A0                      ;
     .byte #$A0                      ;
