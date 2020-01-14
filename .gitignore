@@ -1,4 +1,3 @@
 # Don't accidentally check in the provided header files
 macro.h
-vcs.h
 xmacro.h
