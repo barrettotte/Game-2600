@@ -10,11 +10,10 @@
     processor 6502                  ; set processor type for DASM
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;   Include header files with VCS registers, memory mappings, and macros    ;;
+;;                              Includes                                     ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-    include "vcs.h"                 ; TODO: remove include and embed in here
-
+    include "vcs.h"                 ; TIA, RIOT memory mappings from DASM
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;                      Declare variables/constants                          ;;
@@ -43,6 +42,7 @@ EnemySprOffset      ds 1            ; $98     : enemy sprite offset
 
 Frame               ds 1            ; $9D     : count frames drawn
 Random              ds 1            ; $9E     : general purpose random number
+GameState           ds 1            ; $9F     : bit 7: 1=active, 0=game over
 
 ; Constants
 GAME_HEIGHT         equ 89          ; 2 line kernel -> 180 = 90 * 2
@@ -74,12 +74,12 @@ ClearStack:                         ; set stack addresses to 0
     pha                             ; push 0 to stack
     bne ClearStack                  ; while(!z) keep clearing stack
 
-    ; init variables
+InitVariables:
     lda #0                          ;
     sta Score                       ; reset score
     sta Timer                       ; reset timer
     lda #$80                        ;
-    sta Random                      ; init random
+    sta Random                      ; seed random number generator
 
     ldx #0                          ;
     stx ObjectX                     ; set P0 x position
@@ -103,6 +103,9 @@ ClearStack:                         ; set stack addresses to 0
     sta EnemyGfxPtr                 ;
     lda #>EnemyGfx0                 ; hi byte
     sta EnemyGfxPtr+1               ;
+
+    lda #%10000000                  ; set gamestate active
+    sta GameState                   ;
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -138,6 +141,7 @@ VerticalSync subroutine             ;
     sta GRP0                        ; clear player 0 graphics
     sta VDELP0                      ; player 0 vertical delay off
     sta VDELP1                      ; player 1 vertical delay off
+    sta CXCLR                       ; clear collision flags
     sta WSYNC                       ; wait for third scanline
     sta VSYNC                       ; VSYNC off
     rts                             ; end VerticalSync subroutine
@@ -148,7 +152,12 @@ VerticalSync subroutine             ;
 ;;  Game logic                                                               ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 VerticalBlank subroutine            ;
-    jsr ProcessInput                ; handle player input
+    jsr GetRandom                   ; calculate new random value
+    jsr ProcessSwitches             ; process console switches
+    bit GameState                   ; check game state
+    bpl .NotActive                  ; if(!z) game not active
+    jsr ProcessInput                ; process player input (joystick)
+.NotActive:                         ;
     jsr UpdateObjPositions          ; update object positions
     jsr SetObjColors                ; set object colors
     jsr SetupScoreboard             ; prepare scoreboard for display
@@ -373,6 +382,34 @@ SetObjXPos subroutine               ;
     sta.wx HMP0,X                   ;  5 19 - set fine position
     sta RESP0,X                     ;  4 23 - set coarse position
     rts                             ;  6 29 - end SetObjXPos subroutine
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;                           [ProcessSwitches]                               ;;
+;; Process the SELECT and RESET switches on the console with SWCHB register. ;;
+;;   Bit 7,6 right and left difficulty   (0=beginner,        1=advanced)     ;;
+;;   Bit 3   TV type                     (0=black and white, 1=color)        ;;
+;;   Bit 1,0 select and reset            (0=pressed,         1=not pressed)  ;;
+;;   Bit 5,4,2 are not used                                                  ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+ProcessSwitches subroutine          ;
+    lda SWCHB                       ; load switches
+    lsr                             ; RESET state in C flag
+.Reset:                             ;
+    bcs .NoReset                    ; if(c) reset not pressed
+    jsr Reset                       ; else, reset the game
+    lda #%10000000                  ;
+    sta GameState                   ; set gamestate active
+    bne .NoSelect                   ; reset complete
+.NoReset:                           ;
+    lsr                             ; SELECT state in C flag
+    bcs .NoSelect                   ; if(c) select not pressed
+    lda #0                          ;
+    sta GameState                   ; set gamestate active
+.Select:                            ;
+    nop                             ; select has no functionality
+.NoSelect:                          ;
+    rts                             ; end ProcessSwitches subroutine
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

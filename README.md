@@ -6,11 +6,20 @@ I didn't want to make anything too crazy that I would spend weeks on.
 I was just genuinely curious what all goes into making a game with this architecture.
 
 
+## Stella Emulator Controls
+* Arrow keys - joystick
+* Spacebar   - fire
+* F2 - reset
+* F3 - Color TV
+* F4 - Black and white TV
+* PAUSE - pause emulator
+
+
 ## References
 **Main reference**: https://atariage.com/forums/profile/3056-spiceware/ . This guy is absolutely incredible with 6502 asm.
 
 
-* 6502 instruction set with cycle counts - http://nesdev.com/6502_cpu.txt
+* 6502 instruction set with cycle counts - https://www.masswerk.at/6502/6502_instruction_set.html
 * Atari 2600 killer hacks - https://atariage.com/forums/topic/71120-6502-killer-hacks/page/3/?tab=comments#comment-1071314
   * ```.byte $2C``` - "skip 2 bytes" pseudo-instruction (ABS BIT)
 * Counting cycles on Atari 2600 - https://www.randomterrain.com/atari-2600-memories-guide-to-cycle-counting.html
