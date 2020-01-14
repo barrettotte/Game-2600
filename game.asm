@@ -62,12 +62,12 @@ BG_COLOR            equ #$84        ; blue
     org $F800                       ; 2K ROM start $F800, 4K ROM start $F000
 
 Reset:                              ; entry point label
-    ; clean memory and registers
     sei                             ; set external interrupt
     cld                             ; clear decimal flag
-    ldx #0                          ; reset x,y,a registers 
-    txa                             ;
-    tay                             ;
+    ldx #0                          ; reset X register 
+    txa                             ; reset A register
+    tay                             ; reset Y register
+
 ClearStack:                         ; set stack addresses to 0
     dex                             ; x--
     txs                             ;
@@ -130,7 +130,7 @@ VerticalSync subroutine             ;
     sta VSYNC                       ; VSYNC on
     stx TIM64T                      ; set timer to 41 scanlines.(49 * 64) / 76
     sta CTRLPF                      ; set playfield control (score mode)
-    inc Frame                       ; 
+    inc Frame                       ; increment frame counter
     sta WSYNC                       ; wait for first scanline
     sta WSYNC                       ; wait for second scanline
     lda #0                          ;
@@ -156,6 +156,7 @@ VerticalBlank subroutine            ;
     jsr ProcessSwitches             ; process console switches
     bit GameState                   ; check game state
     bpl .NotActive                  ; if(!z) game not active
+    jsr Tick                        ; tick timer
     jsr ProcessInput                ; process player input (joystick)
 .NotActive:                         ;
     jsr UpdateObjPositions          ; update object positions
@@ -285,13 +286,29 @@ Overscan subroutine                 ;
     sta VBLANK                      ; VBLANK on
     lda #32                         ; target 27 scanlines. 32 = (27 * 76) / 64
     sta TIM64T                      ; set timer
-
-    ; TODO: collisions
+   ;jsr ProcessSound                ; TODO:
+    bit GameState                   ; check gamestate
+    bpl .Wait                       ; while(!n) 
+   ;jsr CheckCollisions             ; TODO:
 .Wait:
     sta WSYNC                       ; wait for next scanline
     lda INTIM                       ; check timer
-    bne .Wait                       ; while(x != 0)
+    bne .Wait                       ; while(!z)
     rts                             ; end Overscan subroutine
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;                                [Tick]                                     ;;
+;; Tick timer roughly once every second.                                     ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+Tick subroutine                     ; 
+    lda Frame                       ; load frame counter
+    and #63                         ; check if enough frames have passed
+    beq .DoTick                     ; if(z) tick timer
+    rts                             ; else, don't tick timer yet
+.DoTick:                            ;
+    inc Timer                       ; 
+    rts                             ; end Tick subroutine
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -302,7 +319,7 @@ Overscan subroutine                 ;
 GetRandom subroutine                ;
     lda Random                      ;
     lsr                             ; shift right
-    bcc .Done                       ; if(c) random number finished
+    bcc .Done                       ; if(!c) random number finished
 .Done:                              ;
     sta Random                      ; 
     rts                             ; end GetRandom subroutine
@@ -324,7 +341,7 @@ SetObjColors subroutine             ;
     sta COLUP0,X                    ; set object color
     dey                             ; y--
     dex                             ; x--
-    bpl .Loop                       ; while(x > 0)
+    bpl .Loop                       ; while(!n)
     rts                             ; end SetObjColors subroutine
 
 
@@ -333,11 +350,6 @@ SetObjColors subroutine             ;
 ;;  Setup BCD digits for timer and score variables                           ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 SetupScoreboard subroutine          ;
-    inc Timer                       ; TODO: This is a test
-    bne .Skip                       ; TODO: ^
-    inc Score                       ; TODO: ^
-
-.Skip:                              ;
     ldx #1                          ; 
 .Loop:                              ;
     lda Score,X                     ; load ones place
@@ -358,7 +370,7 @@ SetupScoreboard subroutine          ;
     adc Temp                        ; (A / 16) + (A / 4)
     sta DigitTens,X                 ; x: 1=timer, 0=score
     dex                             ; x--
-    bpl .Loop                       ; while(x > 0)
+    bpl .Loop                       ; while(!n)
     rts                             ; end SetupScoreboard subroutine
 
 
