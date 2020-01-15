@@ -47,11 +47,8 @@ GameState           ds 1            ; $9F     : bit 7: 1=active, 0=game over
 ; Constants
 GAME_HEIGHT         equ 89          ; 2 line kernel -> 180 = 90 * 2
 DIGITS_HEIGHT       equ 5           ; height of digit graphics
-PLAYER_HEIGHT       equ 16          ; height of player graphics
-ENEMY_HEIGHT        equ 8           ; height of enemy graphics
-MUSH_HEIGHT         equ 8           ; height of mushroom graphics
-
-BG_COLOR            equ #$84        ; blue
+P0_HEIGHT           equ 16          ; height of player 0 graphics
+P1_HEIGHT           equ 8           ; height of player 1 graphics
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -133,6 +130,7 @@ VerticalSync subroutine             ;
     inc Frame                       ; increment frame counter
     sta WSYNC                       ; wait for first scanline
     sta WSYNC                       ; wait for second scanline
+
     lda #0                          ;
     sta PF0                         ; clear playfield 0
     sta PF1                         ; clear playfield 1
@@ -149,7 +147,7 @@ VerticalSync subroutine             ;
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;                           [VerticalBlank]                                 ;;
-;;  Game logic                                                               ;;
+;;  Game logic before draw                                                   ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 VerticalBlank subroutine            ;
     jsr GetRandom                   ; calculate new random value
@@ -234,10 +232,14 @@ Kernel subroutine                   ;
     ; ----------------------------- ;       - new scanline
     sta WSYNC                       ;  3  3 - wait for next scanline
     ; ----------------------------- ;       - new scanline
-    lda #1                          ;  2  2 - score=off, reflect=on
+    lda #0                          ;  2  2 - score=off, reflect=on
     sta CTRLPF                      ;  3  5 - set playfield control
+    sta PF0                         ;  3  8 - set playfield 0
+    sta PF1                         ;  3 11 - set playfield 1
+
+
     ldy #GAME_HEIGHT+1              ;  2  7 - 180 scanlines (90 * 2)
-    lda #ENEMY_HEIGHT-1             ;  2  9 - load enemy height
+    lda #P1_HEIGHT-1                ;  2  9 - load enemy height
     dcp EnemyDraw                   ;  5 14 - decrement and compare with height
     bcs .PreP1Gfx                   ;  2 16 - (3 17) if(c) enemy on this line
     lda #0                          ;  2 18 - else, turn off player 1 graphics
@@ -247,7 +249,7 @@ Kernel subroutine                   ;
     sta GRP1                        ;  3 25 - @0-22 set player 1 graphics
     dey                             ;  2 27 - y--
 .GameAreaLoop:                      ;    13
-    lda #PLAYER_HEIGHT-1            ;  2 15 - load player height
+    lda #P0_HEIGHT-1                ;  2 15 - load player height
     dcp PlayerDraw                  ;  5 20 - decrement and compare to height
     bcs .DrawP0Gfx                  ;  2 22 - (3 23) if(c) player is on line
     lda #0                          ;  2 24 - else, turn off player 0 graphics
@@ -259,7 +261,7 @@ Kernel subroutine                   ;
     ; ----------------------------- ;       - new scanline
     ;  line one of two-line kernel  ;       -
     sta GRP0                        ;  3  3 - @0-22 set player 0 graphics
-    lda #ENEMY_HEIGHT-1             ;  2 10 - preload enemy height
+    lda #P1_HEIGHT-1                ;  2 10 - preload enemy height
     dcp EnemyDraw                   ;  5 15 - decrement and compare to height
     bcs .DrawP1Gfx                  ;  2 17 - (3 18) if(c) enemy is on line
     lda #0                          ;  2 19 - else, turn off player 1 graphics
@@ -278,7 +280,7 @@ Kernel subroutine                   ;
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;                              [Overscan]                                   ;;
-;;  Game logic after draw - 27 scanlines                                     ;;
+;;  Game logic after draw                                                    ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 Overscan subroutine                 ;
     sta WSYNC                       ; wait for next scanline
@@ -288,9 +290,9 @@ Overscan subroutine                 ;
     sta TIM64T                      ; set timer
    ;jsr ProcessSound                ; TODO:
     bit GameState                   ; check gamestate
-    bpl .Wait                       ; while(!n) 
+    bpl .Wait                       ; while(!n) if active process
    ;jsr CheckCollisions             ; TODO:
-.Wait:
+.Wait:                              ; else, wait until overscan finished
     sta WSYNC                       ; wait for next scanline
     lda INTIM                       ; check timer
     bne .Wait                       ; while(!z)
@@ -299,7 +301,7 @@ Overscan subroutine                 ;
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;                                [Tick]                                     ;;
-;; Tick timer roughly once every second.                                     ;;
+;; Increment timer roughly once every second.                                ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 Tick subroutine                     ; 
     lda Frame                       ; load frame counter
@@ -501,15 +503,15 @@ UpdateObjPositions subroutine       ;
     bcs .NoDelayP0                  ; if(c) don't use vertical delay for P0
     stx VDELP0                      ; else, set vertical delay on for P0
 .NoDelayP0:                         ;
-    lda #(GAME_HEIGHT+PLAYER_HEIGHT);
+    lda #(GAME_HEIGHT + P0_HEIGHT)  ;
     sec                             ; set carry
     sbc Temp                        ;
     sta PlayerDraw                  ;
-    lda #<(PlayerGfx0+PLAYER_HEIGHT-1); lo bit player gfx pointer
+    lda #<(PlayerGfx0 + P0_HEIGHT-1); lo bit player gfx pointer
     sec                             ; set carry
     sbc Temp                        ;
     sta PlayerGfxPtr                ;
-    lda #>(PlayerGfx0+PLAYER_HEIGHT-1); hi bit player gfx pointer
+    lda #>(PlayerGfx0 + P0_HEIGHT-1); hi bit player gfx pointer
     sbc #0                          ;
     sta PlayerGfxPtr+1              ;
 
@@ -521,15 +523,15 @@ UpdateObjPositions subroutine       ;
     bcs .NoDelayP1                  ; if(c) don't use vertical delay for P1
     stx VDELP1                      ; else, set vertical delay on for P1
 .NoDelayP1:                         ;
-    lda #(GAME_HEIGHT+ENEMY_HEIGHT+1);
+    lda #(GAME_HEIGHT + P1_HEIGHT+1);
     sec                             ; set carry
     sbc Temp                        ;
     sta EnemyDraw                   ;
-    lda #<(EnemyGfx0+ENEMY_HEIGHT-1); lo bit enemy gfx pointer
+    lda #<(EnemyGfx0 + P1_HEIGHT-1) ; lo bit enemy gfx pointer
     sec                             ; set carry
     sbc Temp                        ;
     sta EnemyGfxPtr                 ;
-    lda #>(EnemyGfx0+ENEMY_HEIGHT-1); hi bit enemy gfx pointer
+    lda #>(EnemyGfx0 + P1_HEIGHT-1) ; hi bit enemy gfx pointer
     sbc #0                          ;
     sta EnemyGfxPtr+1               ;
     rts                             ; end UpdateObjPositions subroutine
@@ -547,17 +549,19 @@ Sleep12 subroutine                  ;
 ;;                         ROM Lookup Tables                                 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-ObjectColors:
-    .byte $86                       ; blue       - COLUP0, p0 and m0
-    .byte $C6                       ; green      - COLUP1, p1 and m1
-    .byte $46                       ; red        - COLUPF, pf and ball
-    .byte $00                       ; black      - COLUBK, background
-    .byte $0E                       ; white      - COLUP0, p0 and m0
-    .byte $06                       ; dark grey  - COLUP1, p1 and m1
-    .byte $0A                       ; light grey - COLUPF, pf and ball
-    .byte $00                       ; black      - COLUBK, background
+ObjectColors:                       ;
+                                    ; ---Color TV---
+    .byte $46                       ; red         - COLUP0, p0 and m0
+    .byte $D4                       ; dark green  - COLUP1, p1 and m1
+    .byte $85                       ; navy blue   - COLUPF, pf and ball
+    .byte $85                       ; navy blue   - COLUBK, background
+                                    ; ---Black and White TV---
+    .byte $0E                       ; white       - COLUP0, p0 and m0
+    .byte $06                       ; dark grey   - COLUP1, p1 and m1
+    .byte $0A                       ; light grey  - COLUPF, pf and ball
+    .byte $02                       ; dark grey   - COLUBK, background
 
-DigitsBitmap:
+DigitsBitmap:                       ;
     .byte %01110111                 ; ### ###
     .byte %01010101                 ; # # # #
     .byte %01010101                 ; # # # #
@@ -654,26 +658,6 @@ DigitsBitmap:
     .byte %01000100                 ; #   #
     .byte %01000100                 ; #   #
 
-MushSprite0:                        ;
-    .byte #%11111111                ; ########
-    .byte #%00011000                ;    ##
-    .byte #%00011000                ;    ##
-    .byte #%01111110                ;  ######
-    .byte #%01111110                ;  ######
-    .byte #%00111100                ;   ####
-    .byte #%00111100                ;   ####
-    .byte #%00011000                ;    ##
-
-MushColor0:                         ;
-    .byte #$F2                      ;
-    .byte #$0C                      ;
-    .byte #$0C                      ;
-    .byte #$42                      ;
-    .byte #$42                      ;
-    .byte #$42                      ;
-    .byte #$42                      ;
-    .byte #$42                      ;
-
 EnemyGfx0:                          ;
     .byte #%01100110                ;  ##  ##
     .byte #%00011000                ;    ##
@@ -694,7 +678,7 @@ EnemyGfx1:                          ;
     .byte #%01111110                ;  ######
     .byte #%00111100                ;   ####
         
-EnemyColor0:                        ; TODO: hardcode in draw proc.
+EnemyColor0:                        ;
     .byte #$D6                      ;
     .byte #$D6                      ;
     .byte #$D6                      ;

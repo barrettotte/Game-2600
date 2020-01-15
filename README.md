@@ -2,8 +2,20 @@
 
 A super basic "game" made for the Atari 2600 (VCS) to strengthen my 6502 assembly knowledge in a fun way.
 
-I didn't want to make anything too crazy that I would spend weeks on.
+I didn't want to make anything too crazy that I would spend months on.
 I was just genuinely curious what all goes into making a game with this architecture.
+
+
+## Game
+The player collects the ball and dodges the enemy that randomly spawns and moves up or down.
+
+That's it.
+
+So, this isn't quite a game; its more of a screw around project I kicked around.
+
+I really wanted to get some projectiles, basic enemy pathfinding, and more fun gameplay going. 
+But, truthfully I just don't feel like working on this anymore.
+
 
 
 ## Stella Emulator Controls
