@@ -27,6 +27,53 @@ But, truthfully I just don't feel like working on this anymore.
 * PAUSE - pause emulator
 
 
+## Notes
+
+<br>
+
+#### Memory Map
+```
++---------------------------+
+|       TIA Registers       | $00-$7F
++---------------------------+
+|         PIA RAM           | $80-$FF
++---------------------------+
+|           ???             |
++---------------------------+
+|    PIA Ports and Timer    | $280-$297
++---------------------------+
+|           ???             |
++---------------------------+
+|       Cartridge ROM       | $F000-$FFFF
++---------------------------+
+```
+
+<br>
+
+#### NTSC Video Frame
+```
+
++-------------------------------------------------+        <-----+
+|                 Vertical Sync                   |   3 lines    |
+|                                                 |              |
++-------------------------------------------------+              |
+|                 Vertical Blank                  |  37 lines    |
+|                                                 |              |
++--------------------+----------------------------+              +-- 262 lines
+|    Horiz.          |           Visible          |              |
+|    Blank           |            Frame           | 192 lines    |
+|                    |  <-- 160 color clocks -->  |              |
++--------------------+----------------------------+              |
+|                    Overscan                     |  30 lines    |
+|                                                 |              |
++-------------------------------------------------+        <-----+
+
+|--------------  228 color clocks ----------------|
+|---------------  76  CPU cycles -----------------|
+
+```
+
+
 ## References
 **Main reference**: https://atariage.com/forums/profile/3056-spiceware/ . This guy is absolutely incredible with 6502 asm.
 
