@@ -1,0 +1,2 @@
+# Ignore DASM header files
+*.h linguist-detectable=false
