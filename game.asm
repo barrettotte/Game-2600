@@ -1,12 +1,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;                                                                           ;;
-;;                             Defender 2600                                 ;;
+;;                               Game 2600                                   ;;
 ;;                           Barrett Otte 2020                               ;;
 ;;                                                                           ;;
 ;; Player collects ball while dodging enemy.                                 ;;
 ;;                                                                           ;;
-;; This was supposed to be an item defending game and a lot more fun, but    ;;
-;; its about time I put this on the shelf forever.                           ;;
+;; I wanted to do way more with this, but my motivation is fading.           ;;
+;; Its about time this gets put on the shelf.                                ;;
 ;;                                                                           ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
