@@ -3,8 +3,6 @@
 ;;                               Game 2600                                   ;;
 ;;                           Barrett Otte 2020                               ;;
 ;;                                                                           ;;
-;; Player collects ball while dodging enemy.                                 ;;
-;;                                                                           ;;
 ;; I wanted to do way more with this, but my motivation is fading.           ;;
 ;; Its about time this gets put on the shelf.                                ;;
 ;;                                                                           ;;
@@ -38,11 +36,13 @@ ObjectY             ds 4            ; $8D-$90 : P0, P1, M0, M1 y positions
 
 PlayerDraw          ds 1            ; $91     : draw storage for player 0
 EnemyDraw           ds 1            ; $92     : draw storage for player 1
+
 PlayerGfxPtr        ds 2            ; $93-$94 : graphics pointer for player 0
-EnemyGfxPtr         ds 2            ; $95-$96 : graphics pointer for player 1
+PlayerColPtr        ds 2            ; $95-$96 : pointer to player 0 color
 PlayerSprOffset     ds 1            ; $97     : player 0 sprite offset
-EnemySprOffset      ds 1            ; $98     : player 1 sprite offset
-PlayerColPtr        ds 2            ; $99-9A  : pointer to player 0 color
+
+EnemyGfxPtr         ds 2            ; $98-$99 : graphics pointer for player 1
+EnemySprOffset      ds 1            ; $9A     : player 1 sprite offset
 
 Frame               ds 1            ; $9B     : count frames drawn
 Random              ds 1            ; $9C     : general purpose random number
@@ -51,8 +51,8 @@ GameState           ds 1            ; $9D     : bit 7: 1=active, 0=game over
 ; Constants
 GAME_HEIGHT         equ 89          ; 2 line kernel -> 180 = 90 * 2
 DIGITS_HEIGHT       equ 5           ; height of digit graphics
-P0_HEIGHT           equ 16          ; height of player 0 graphics
-P1_HEIGHT           equ 8           ; height of player 1 graphics
+P0_HEIGHT           equ 17          ; height of player 0 graphics +1
+P1_HEIGHT           equ 9           ; height of player 1 graphics +1
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -94,6 +94,21 @@ InitVariables:
     sta PlayerSprOffset             ; set player initial sprite
     sta EnemySprOffset              ; set enemy initial sprite
 
+    lda #<PlayerGfx0                ; setup player 0 graphics pointer
+    sta PlayerGfxPtr                ; lo byte
+    lda #>PlayerGfx0                ; 
+    sta PlayerGfxPtr+1              ; hi byte
+
+    lda #<PlayerCol0                ; setup player 0 color pointer
+    sta PlayerColPtr                ; lo byte
+    lda #>PlayerCol0
+    sta PlayerColPtr+1              ; hi byte
+
+    lda #<EnemyGfx0                 ; setup player 1 graphics pointer
+    sta EnemyGfxPtr                 ; lo byte
+    lda #>EnemyGfx0
+    sta EnemyGfxPtr+1               ; hi byte
+
     lda #%10000000                  ; set gamestate active
     sta GameState                   ;
 
@@ -124,7 +139,7 @@ VerticalSync subroutine             ;
     sta WSYNC                       ; wait for first scanline
     sta WSYNC                       ; wait for second scanline
 
-    lda #0                          ;
+    lda #0                          ; reset some TIA registers
     sta PF0                         ; clear playfield 0
     sta PF1                         ; clear playfield 1
     sta PF2                         ; clear playfield 2
@@ -150,6 +165,7 @@ VerticalBlank subroutine            ;
     jsr Tick                        ; tick timer
     jsr ProcessInput                ; process player input (joystick)
 .NotActive:                         ;
+    
     jsr UpdateObjPositions          ; update object positions
     jsr SetObjColors                ; set object colors
     jsr SetupScoreboard             ; prepare scoreboard for display
@@ -164,7 +180,6 @@ VerticalBlank subroutine            ;
 ;;  (This formatting was taken from https://www.randomterrain.com)           ;;
 ;;  EX: instruction ; XX YY - comment                                        ;;
 ;;   - XX = cycles to execute,  YY = cycle count for current scanline        ;;
-;;   - @AA-BB = instruction must happen at this range of cycles              ;;
 ;;                                                                           ;;
 ;; Game area drawn with two line kernel.                                     ;;
 ;;   - Line 1 updates player 0 and playfield                                 ;;
@@ -178,19 +193,21 @@ Kernel subroutine                   ;
     bne .Kernel                     ;  2  6 - while(!z)
     sta VBLANK                      ;  3  9 - VBLANK off
     ldx #5                          ;  2 11 - scoreboard iterator
-.ScoreboardLoop:                    ;    43 -
-    ldy DigitTens                   ;  3 46 - tens digit offset for score
-    lda DigitsBitmap,Y              ;  5 51 - load tens digit graphics
-    and #$F0                        ;  2 53 - mask lo 4 bits (ones place)
-    sta ScoreGfx                    ;  3 56 -
-    ldy DigitOnes                   ;  3 59 - ones digit offset for score
-    lda DigitsBitmap,Y              ;  5 64 - load ones digit graphics
-    and #$0F                        ;  2 66 - mask hi 4 bits (tens place)
-    ora ScoreGfx                    ;  3 69 - merge tens and ones digit gfx
-    sta ScoreGfx                    ;  3 72 -
-    sta WSYNC                       ;  3 75 - wait for next scanline
+    lda #$00                        ;  2 13 - black
+    sta COLUBK                      ;  3 16 - set background color
+.ScoreboardLoop:                    ;    16 -
+    ldy DigitTens                   ;  3 19 - tens digit offset for score
+    lda DigitsBitmap,Y              ;  5 24 - load tens digit graphics
+    and #$F0                        ;  2 26 - mask lo 4 bits (ones place)
+    sta ScoreGfx                    ;  3 29 -
+    ldy DigitOnes                   ;  3 32 - ones digit offset for score
+    lda DigitsBitmap,Y              ;  5 37 - load ones digit graphics
+    and #$0F                        ;  2 39 - mask hi 4 bits (tens place)
+    ora ScoreGfx                    ;  3 42 - merge tens and ones digit gfx
+    sta ScoreGfx                    ;  3 45 -
+    sta WSYNC                       ;  3 46 - wait for next scanline
     ; ----------------------------- ;       - new scanline
-    sta PF1                         ;  3  3 - @66-28,update playfield for score
+    sta PF1                         ;  3  3 - update playfield for score
     ldy DigitTens+1                 ;  3  6 - tens digit offset for timer
     lda DigitsBitmap,Y              ;  5 11 - load tens digit graphics
     and #$F0                        ;  2 13 - mask lo 4 bits (ones place)
@@ -201,18 +218,18 @@ Kernel subroutine                   ;
     ora TimerGfx                    ;  3 29 - merge tens and ones digit gfx
     sta TimerGfx                    ;  3 32 -
     jsr Sleep12                     ; 12 44 - waste 12 cycles
-    sta PF1                         ;  3 47 - @39-54,update playfield for timer
+    sta PF1                         ;  3 47 - update playfield for timer
     ldy ScoreGfx                    ;  3 50 - preload for next scanline
     sta WSYNC                       ;  3 53 - wait for next scanline
     ; ----------------------------- ;       - new scanline
-    sty PF1                         ;  3  3 - @66-28, update playfield for score
+    sty PF1                         ;  3  3 - update playfield for score
     inc DigitTens                   ;  5  8 - next line of graphics, score tens
     inc DigitTens+1                 ;  5 13 - next line of graphics, timer tens
     inc DigitOnes                   ;  5 18 - next line of graphics, score ones
     inc DigitOnes+1                 ;  5 23 - next line of graphics, timer ones
     jsr Sleep12                     ; 12 35 - waste 12 cycles
     dex                             ;  2 37 - x--
-    sta PF1                         ;  3 40 - @39-54,update playfield for timer
+    sta PF1                         ;  3 40 - update playfield for timer
     bne .ScoreboardLoop             ;  2 42 - while(!z)
     sta WSYNC                       ;  3 45 - wait for next scanline
     ; ----------------------------- ;       - new scanline
@@ -225,34 +242,54 @@ Kernel subroutine                   ;
     sta CTRLPF                      ;  3  5 - set playfield control
     sta PF0                         ;  3  8 - set playfield 0
     sta PF1                         ;  3 11 - set playfield 1
-    ldy #GAME_HEIGHT+1              ;  2 13 - 180 scanlines (90 * 2)
-    dey                             ;  2 15 - y--
-.GameAreaLoop:                      ;    13
-    lda #P0_HEIGHT-1                ;  2 15 - load player height
-    dcp PlayerDraw                  ;  5 20 - decrement and compare to height
-    bcs .DrawP0Gfx                  ;  2 22 - if(c) player is on line
-    lda #0                          ;  2 24 - else, turn off player 0 graphics
-    .byte $2C                       ;  4 28 - ABS BIT trick skip lda (gfxPtr),Y
-.DrawP0Gfx:                         ;    23
-    lda (PlayerGfxPtr),Y            ;  5 28 - load player graphics data
-    sta WSYNC                       ;  3 31 - wait for next scanline
-    ; ----------------------------- ;       - new scanline
-    ;  line one of two-line kernel  ;       -
-    sta GRP0                        ;  3  3 - @0-22 set player 0 graphics
-    lda #P1_HEIGHT-1                ;  2 10 - preload enemy height
-    dcp EnemyDraw                   ;  5 15 - decrement and compare to height
-    bcs .DrawP1Gfx                  ;  2 17 - if(c) enemy is on line
-    lda #0                          ;  2 19 - else, turn off player 1 graphics
-    .byte $2C                       ;  4 23 - ABS BIT trick skip lda (gfxPtr),Y
-.DrawP1Gfx:                         ;    18 -
-    lda (EnemyGfxPtr),Y             ;  5 23 - load enemy graphics data
-    sta WSYNC                       ;  3 31 - wait for next scanline
-    ; ----------------------------- ;       - new scanline
-    ;  line two of two-line kernel  ;       -
-    sta GRP1                        ;  3  3 - @0-22 set player 1 graphics
-    dey                             ;  2 13 - y-- (kernel loop counter)
-    bpl .GameAreaLoop               ;  2 15 - if(!z) draw more game area
-    rts                             ;  6 21 - end Kernel subroutine
+
+    lda #$84                        ;  2 13 - dark blue
+    sta COLUBK                      ;  3 16 - set background color
+    ldx #GAME_HEIGHT+1              ;  2 18 - load game height to iterate
+.GameAreaLoop:                      ;       - draw game area scanlines
+
+.CheckP0Gfx:                        ;    18 - check if P0 gfx should be drawn
+    txa                             ;  2 20 - move current line to A 
+    sec                             ;  2 22 - set carry
+    sbc ObjectY                     ;  3 25 - current P0 gfx y coordinate
+    pha                             ;  3 28 - push P0 gfx y to stack
+    cmp #P0_HEIGHT                  ;  2 30 - if(inside P0 gfx bounds)
+    bcc .DrawP0Gfx                  ;  2 32 -   draw P0 gfx
+    lda #0                          ;  2 34 - else, dont draw P0 gfx
+.DrawP0Gfx:                         ;       - draw player 0 graphics
+    clc                             ;  2 36 - clear carry
+    adc PlayerSprOffset             ;  3 39 - add graphics offset
+    tay                             ;  2 41 -
+    lda (PlayerGfxPtr),Y            ;  5 46 - load player graphics data
+    sta WSYNC                       ;  3 49 - wait for next scanline
+    ; ----------------------------- ;       - new scanline (line one of 2LK)
+    sta GRP0                        ;  3  3 - set player 0 graphics
+    pla                             ;  4  7 - pull P0 gfx y from stack
+    tay                             ;  2  9 -
+    lda (PlayerColPtr),Y            ;  5 14 - load player color data
+    sta COLUP0                      ;  3 17 - set player 0 color
+.CheckP1Gfx:                        ;    17 - check if P0 gfx should be drawn 
+    txa                             ;  2 19 - 
+    sec                             ;  2 21 - set carry
+    sbc ObjectY+1                   ;  3 24 - current P1 gfx y coordinate
+    cmp #P1_HEIGHT                  ;  2 26 - if(inside P1 gfx bounds)
+    bcc .DrawP1Gfx                  ;  2 28 -   draw P1 gfx
+    lda #0                          ;  2 30 - else, dont draw P1 gfx
+.DrawP1Gfx:                         ;    30 - draw player 1 graphics
+    tay                             ;  2 32 -
+    lda (EnemyGfxPtr),Y             ;  5 37 - load enemy graphics data
+    sta WSYNC                       ;  3 40 - wait for next scanline
+    ; ----------------------------- ;       - new scanline (line two of 2LK)
+    sta GRP1                        ;  3  3 - set player 1 graphics
+
+    dex                             ;  2  5 -
+    bne .GameAreaLoop               ;  2  7 - while(!z) keep drawing game area
+
+    lda #0                          ;  2  9 - reset grahpics offsets
+    sta PlayerSprOffset             ;  3 12 - clear player 0 gfx offset
+    sta EnemySprOffset              ;  3 15 - clear player 1 gfx offset
+    sta WSYNC                       ;  3 18 - wait for next scanline
+    rts                             ;  6 24 - end Kernel subroutine
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -294,6 +331,7 @@ Tick subroutine                     ;
 ;;                            [GetRandom]                                    ;;
 ;;  Generate random byte using Galois Linear Feedback Shift Register (LFSR)  ;;
 ;;   http://atariage.com/forums/topic/159268-random-numbers/?p=1958751       ;;
+;;  Sets random 8-bit value in variable Random                               ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 GetRandom subroutine                ;
     lda Random                      ;
@@ -448,19 +486,27 @@ ProcessInput subroutine             ;
 .CheckDown:                         ;
     asl                             ; shift left, carry bit = D
     bcs .CheckUp                    ; if(c) down is not pressed
+    pha                             ; push A to stack
+    lda #0                          ; load first player sprite
+    sta PlayerSprOffset             ; set player sprite offset
+    pla                             ; pull A from stack
     ldy ObjectY,X                   ; get object y position
     dey                             ; else, move object down
     cpy #255                        ; check screen boundary
     bne .SetDown                    ; if(!z) save object y position
-    ldy #GAME_HEIGHT*2+1            ; else, wrap to top of screen (* 2 = 2LK)
+    ldy #GAME_HEIGHT+1              ; else, wrap to top of screen
 .SetDown:                           ;
     sty ObjectY,X                   ; set object y position
 .CheckUp:                           ;
     asl                             ; shift left, carry bit = U
     bcs .Done                       ; if(c) up is not pressed
+    pha                             ; push A to stack
+    lda #P0_HEIGHT*2                ; load third player sprite
+    sta PlayerSprOffset             ; set player sprite offset
+    pla                             ; pull A from stack
     ldy ObjectY,X                   ; load object y position
     iny                             ; else, move object up
-    cpy #GAME_HEIGHT*2+2            ; check screen boundary (* 2 = 2LK)
+    cpy #GAME_HEIGHT+1              ; check screen boundary (* 2 = 2LK)
     bne .SetUp                      ; if(!z) save object y position
     ldy #0                          ; else, wrap to bottom of screen
 .SetUp:                             ;
@@ -471,7 +517,7 @@ ProcessInput subroutine             ;
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;                         [UpdateObjPositions]                              ;;
-;;  Update TIA (x) and kernel variables (y) for all objects                  ;;
+;;  Update TIA for all object x positions                                    ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 UpdateObjPositions subroutine       ;
     ldx #1                          ; 0=player0, 1=player1
@@ -479,44 +525,9 @@ UpdateObjPositions subroutine       ;
     lda ObjectX,X                   ; load object x position
     jsr SetObjXPos                  ; set coarse x pos and fine tune value
     dex                             ; x--
-    bpl .Loop                       ; if(!n) position more objects
+    bpl .Loop                       ; while(!n) position more objects
     sta WSYNC                       ; wait for next scanline
     sta HMOVE                       ; set x position using fine positioning
-
-.UpdateP0:
-    lda ObjectY+0                   ; load player y position
-    lsr                             ; divide by 2 for two line kernel value
-    sta Temp                        ; current scanline (2LK)
-    lda #(GAME_HEIGHT + P0_HEIGHT)  ;
-
-    sec                             ; set carry
-    sbc Temp                        ; check if player in block
-    sta PlayerDraw                  ; position to attempt draw player
-    
-    lda #<(PlayerGfx0 + P0_HEIGHT-1); lo bit player gfx pointer
-    sec                             ; set carry
-    sbc Temp                        ; 
-    sta PlayerGfxPtr                ; save lo bit
-
-    lda #>(PlayerGfx0 + P0_HEIGHT-1); hi bit player gfx pointer
-    sta PlayerGfxPtr+1              ; save hi bit
-
-.UpdateP1:
-    lda ObjectY+1                   ; load player 1 y position
-    lsr                             ; divide by 2 for two line kernel value
-    sta Temp                        ;
-    lda #(GAME_HEIGHT + P1_HEIGHT)  ;
-    sec                             ; set carry
-    sbc Temp                        ;
-    sta EnemyDraw                   ;
-    lda #<(EnemyGfx0 + P1_HEIGHT-1) ; lo bit enemy gfx pointer
-    sec                             ; set carry
-    sbc Temp                        ;
-    sta EnemyGfxPtr                 ;
-    lda #>(EnemyGfx0 + P1_HEIGHT-1) ; hi bit enemy gfx pointer
-    sbc #0                          ;
-    sta EnemyGfxPtr+1               ;
-
     rts                             ; end UpdateObjPositions subroutine
 
 
@@ -534,7 +545,7 @@ Sleep12 subroutine                  ;
 
 ObjectColors:                       ; ---Color TV---
     .byte $46                       ; red         - COLUP0, p0 and m0
-    .byte $D6                       ; dark green  - COLUP1, p1 and m1
+    .byte $D4                       ; dark green  - COLUP1, p1 and m1
     .byte $85                       ; navy blue   - COLUPF, pf and ball
     .byte $85                       ; navy blue   - COLUBK, background
                                     ; ---Black and White TV---
@@ -641,6 +652,7 @@ DigitsBitmap:                       ;
     .byte %01000100                 ; #   #
 
 EnemyGfx0:                          ;
+    .byte #%00000000                ;
     .byte #%01100110                ;  ##  ##
     .byte #%00011000                ;    ##
     .byte #%10111101                ; # #### #
@@ -651,6 +663,7 @@ EnemyGfx0:                          ;
     .byte #%00111100                ;   ####
 
 EnemyGfx1:                          ;
+    .byte #%00000000                ;
     .byte #%00100100                ;   #  #
     .byte #%00011000                ;    ##
     .byte #%00111100                ;   ####
@@ -661,6 +674,7 @@ EnemyGfx1:                          ;
     .byte #%00111100                ;   ####
 
 PlayerGfx0:                         ;
+    .byte #%00000000                ;
     .byte #%01100110                ;  ##  ##
     .byte #%00100100                ;   #  #
     .byte #%00100100                ;   #  #
@@ -675,10 +689,11 @@ PlayerGfx0:                         ;
     .byte #%00111100                ;   ####
     .byte #%01110110                ;  ### ##
     .byte #%01111110                ;  ######
-    .byte #%01011010                ;  # ## #
+    .byte #%01101010                ;  ## # #
     .byte #%00111100                ;   ####
 
 PlayerGfx1:                         ;
+    .byte #%00000000                ;
     .byte #%00110011                ;   ##  ##
     .byte #%00100010                ;   #   #
     .byte #%00100010                ;   #   #
@@ -697,6 +712,7 @@ PlayerGfx1:                         ;
     .byte #%00111100                ;   ####
     
 PlayerGfx2:                         ;
+    .byte #%00000000                ;
     .byte #%01100110                ;  ##  ##
     .byte #%00100100                ;   #  #
     .byte #%00100100                ;   #  #
@@ -714,7 +730,8 @@ PlayerGfx2:                         ;
     .byte #%01111110                ;  ######
     .byte #%00111100                ;   ####
     
-PlayerCol0:                         ; 
+PlayerCol0:                         ; color
+    .byte #$00                      ;
     .byte #$F0                      ;
     .byte #$A0                      ;
     .byte #$A0                      ;

@@ -1,17 +1,22 @@
 # Game-2600
 
-Some fun messing around with Atari 2600 (VCS) to strengthen my 6502 assembly knowledge in a fun way.
+Some fun messing around with 6502 assembly on the Atari 2600 (VCS).
 
 
 ## Game
-The player collects the ball and dodges the enemy that randomly spawns and moves up or down.
+This isn't quite a game; its more of a screw around project I kicked around.
 
-That's it.
+At this point its only a skeleton and has the following:
+* Scoreboard and timer BCD display
+* Player movement with joysticks
+* Graphics and color binary loading
+* Reset button
+* A bit of black and white TV support
+* Random numbers via Linear Feedback Shift Register (LFSR)
 
-So, this isn't quite a game; its more of a screw around project I kicked around.
 
 I really wanted to do more with this. 
-But, truthfully I just don't feel like working on this anymore. 
+But, truthfully I just don't feel like working on it anymore. 
 Its time for this to go on the shelf.
 
 
@@ -25,6 +30,7 @@ Its time for this to go on the shelf.
 
 
 ## Unimplemented Ideas
+* Full black and white TV support
 * Player and enemy projectiles
 * Basic pathfinding for Enemy
 * Difficulty switches increase enemy speed

@@ -6,5 +6,7 @@ VERBOSE = v0
 
 all:
 	dasm *.asm -$(OUTFMT) -$(VERBOSE) -o$(CART).bin
+test:
+	dasm test.asm -$(OUTFMT) -$(VERBOSE) -o$(CART).bin
 run:
 	stella $(CART).bin
