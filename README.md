@@ -20,12 +20,17 @@ But, truthfully I just don't feel like working on it anymore.
 Its time for this to go on the shelf.
 
 
+## Screenshot
+Yeah...this is all I have after ~2 weeks of messing around. This stuff is difficult for me.
+![screenshot.png](screenshot.png)
+
+
 ## Stella Emulator Controls
 * Arrow keys - joystick
-* Spacebar   - fire
+* Spacebar - fire
 * F2 - reset
-* F3 - Color TV
-* F4 - Black and white TV
+* F3 - color TV
+* F4 - black and white TV
 * PAUSE - pause emulator
 
 
